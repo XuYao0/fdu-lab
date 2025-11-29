@@ -1,0 +1,49 @@
+session start at 20251129 10:42:11
+20251129 10:48:11 Save files\t.xml
+session start at 20251129 11:28:52
+20251129 11:28:58 Save files\t.xml
+session start at 20251129 11:35:47
+20251129 11:36:13 Save files\t.xml
+session start at 20251129 11:42:07
+20251129 11:42:31 Save files\t.xml
+20251129 11:42:50 Close files\t.xml
+20251129 11:43:37 xml-tree files\
+20251129 11:44:58 Save files\t.xml
+session start at 20251129 11:49:01
+20251129 11:49:21 Save files\t.xml
+session start at 20251129 12:03:48
+20251129 12:04:12 xml-tree files\
+20251129 12:04:13 xml-tree files\
+20251129 12:04:14 xml-tree files\
+20251129 12:04:15 xml-tree files\
+20251129 12:04:16 xml-tree files\
+20251129 12:05:02 append-child price price4 book1 29.99
+20251129 12:05:05 append-child price price4 book1 29.99
+20251129 12:05:21 append-child price price4 book1 29.99
+20251129 12:05:22 append-child price price4 book1 29.99
+20251129 12:05:23 append-child price price4 book1 29.99
+20251129 12:05:24 append-child price price4 book1 29.99
+20251129 12:05:25 append-child price price4 book1 29.99
+session start at 20251129 12:06:09
+20251129 12:06:14 xml-tree file\ files\
+20251129 12:06:21 xml-tree file\ files\
+20251129 12:06:23 xml-tree file\ files\
+session start at 20251129 12:50:54
+20251129 12:50:58 xml-tree files\files\t.xml
+20251129 12:51:29 xml-tree files\files\t.xml
+session start at 20251129 12:53:23
+20251129 12:53:27 xml-tree files\files\t.xml
+session start at 20251129 12:54:06
+20251129 12:54:10 xml-tree files\files\t.xml
+session start at 20251129 12:56:22
+20251129 12:56:34 xml-tree files\t.xml
+session start at 20251129 15:06:44
+20251129 15:08:51 Save files\t.xml
+session start at 20251129 16:07:39
+20251129 16:08:43 load files\t.xml
+20251129 16:08:54 load files\t.xml
+20251129 16:08:54 load files\t.xml
+20251129 16:08:55 load files\t.xml
+20251129 16:08:55 load files\t.xml
+20251129 16:08:56 load files\t.xml
+20251129 16:09:05 Close files\t.xml

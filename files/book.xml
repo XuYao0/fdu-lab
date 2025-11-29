@@ -1,0 +1,28 @@
+# log
+<?xml version="1.0" encoding="UTF-8"?>
+<root id="root">
+    <bookstore>
+        <book>
+            <title>
+                Advancd Programming Techniques
+            </title>
+            <author>
+                Mary Jonson
+            </author>
+            <description>
+                This book provieds a comprhensive guid to modern progrmming practises.
+            </description>
+        </book>
+        <book>
+            <title>
+                Web Developmnt Basics
+            </title>
+            <author>
+                Tom Smth
+            </author>
+            <description>
+                Learn how to creat webpages using HTML, CSS and JavaSript, with pratical exmples.
+            </description>
+        </book>
+    </bookstore>
+</root>

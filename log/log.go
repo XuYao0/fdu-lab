@@ -1,9 +1,11 @@
 package log
 
 import (
+	"bufio"
 	"fmt"
 	"lab1/common"
 	"path/filepath"
+	"strings"
 
 	//"lab1/workspace"
 	"os"
@@ -22,6 +24,16 @@ func NewLogModule() *LogModule {
 		logHandles:   make(map[string]*os.File), // 初始化句柄映射
 		sessionStart: time.Now().Format("20060102 15:04:05"),
 	}
+}
+func readFirstLine(handle *os.File) (string, error) {
+	scanner := bufio.NewScanner(handle)
+	if scanner.Scan() { // 读取第一行
+		return scanner.Text(), nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", fmt.Errorf("文件为空")
 }
 
 // 获取或创建指定文件的日志句柄
@@ -66,9 +78,13 @@ func (l *LogModule) getLogHandle(filePath string) (*os.File, error) {
 	return handle, nil
 }
 
-// 实现Observer接口：根据事件中的文件路径写入对应日志
+// Update 实现Observer接口：根据事件中的文件路径写入对应日志
 func (l *LogModule) Update(event common.WorkspaceEvent) {
 	// 从事件中提取文件路径和命令（假设事件结构按之前设计）
+	Type := event.Type
+	if Type == common.EventFileActivated || Type == common.EventFileSwitched || Type == common.EventFileClosed || Type == common.EventProgramExit {
+		return
+	}
 	filePath := event.FilePath
 	command := event.Command
 	if filePath == "" || command == "" {
@@ -82,7 +98,21 @@ func (l *LogModule) Update(event common.WorkspaceEvent) {
 		return
 	}
 
-	// 格式化日志行（时间戳 + 命令）
+	_handle, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		fmt.Println("无法打开或创建文件:", err)
+		return
+	}
+
+	firstLine, err := readFirstLine(_handle)
+	if err != nil {
+		fmt.Println("read the first line failed:", err)
+		return
+	} //在这里加一个过滤功能，读取第一行，如果当前的Type 被禁止了，那直接返回
+	if strings.Contains(firstLine, event.Type) {
+		return
+	}
+
 	timeStr := time.UnixMilli(event.Timestamp).Format("20060102 15:04:05")
 	logLine := fmt.Sprintf("%s %s\n", timeStr, command)
 

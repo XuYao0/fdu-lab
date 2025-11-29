@@ -3,9 +3,11 @@ package workspace
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"lab1/common"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -77,7 +79,7 @@ func (w *Workspace) RemoveObserver(observer common.Observer) {
 	}
 }
 
-// notifyObservers 通知所有观察者（公开，暴露给编辑器
+// NotifyObservers  通知所有观察者（公开，暴露给编辑器
 func (w *Workspace) NotifyObservers(event common.WorkspaceEvent) {
 	for _, observer := range w.observers {
 		observer.Update(event)
@@ -196,6 +198,12 @@ func (w *Workspace) RestoreState(editorFactory func(path string, ws common.WorkS
 		if err != nil {
 			return err
 		}
+		//w.NotifyObservers(common.WorkspaceEvent{
+		//	FilePath:  path,
+		//	Type:      common.EventFileActivated,
+		//	Command:   "",
+		//	Timestamp: time.Now().UnixMilli(),
+		//})
 		w.OpenEditors[path] = editor
 	}
 
@@ -219,7 +227,7 @@ func (w *Workspace) RestoreState(editorFactory func(path string, ws common.WorkS
 	// 恢复活动文件
 	if memento.ActiveFilePath != "" {
 		if editor, ok := w.OpenEditors[memento.ActiveFilePath]; ok {
-			w.activeEditor = editor
+			w.SetActiveEditor(editor)
 		}
 	}
 	return nil
@@ -235,15 +243,36 @@ func (w *Workspace) RestoreState(editorFactory func(path string, ws common.WorkS
 //所有的日志状态标记，维护在编辑器就够了
 //在log onoff 开关的时候，只对编辑器修改，并且处理相关文件的首行，其他情况下，比如新建，读备忘区，都已经处理过
 
-// 功能：1. 拼接路径为 ./files/文件名 2. 检查文件是否已打开 3. 通过工厂创建编辑器 4. 加入工作区并设为激活
+// LoadFile 功能：1. 拼接路径为 ./files/文件名 2. 检查文件是否已打开 3. 通过工厂创建编辑器 4. 加入工作区并设为激活
 func (w *Workspace) LoadFile(path string, editorFactory func(path string, w common.WorkSpaceApi) (common.Editor, error)) (common.Editor, error) {
 	// 1. 标准化路径：使用 filepath 包拼接，保证跨平台兼容性（Linux/macOS /, Windows \）
 	// 仅拼接一次 ./files 目录，解决路径重复问题
 	fullPath := filepath.Join("./files", path)
 
+	if w.GetActiveEditor().GetFilePath() != "" {
+		w.NotifyObservers(common.WorkspaceEvent{
+			FilePath:  w.GetActiveEditor().GetFilePath(),
+			Type:      common.EventFileSwitched,
+			Command:   "",
+			Timestamp: time.Now().UnixMilli(),
+		})
+	}
+
 	// 2. 检查文件是否已在工作区中打开
 	if editor, ok := w.OpenEditors[fullPath]; ok {
 		w.SetActiveEditor(editor)
+		firstLine := strings.Split(editor.GetContent(), "\n")[0]
+		fmt.Println("first", firstLine)
+
+		if strings.Contains(firstLine, "# log") {
+			fmt.Println("ls")
+			w.NotifyObservers(common.WorkspaceEvent{
+				FilePath:  fullPath,
+				Type:      "load",
+				Timestamp: time.Now().UnixMilli(),
+				Command:   "load " + fullPath,
+			})
+		}
 		return editor, nil
 	}
 
@@ -259,10 +288,18 @@ func (w *Workspace) LoadFile(path string, editorFactory func(path string, w comm
 		return nil, errors.New("创建编辑器失败: " + err.Error())
 	}
 
-	// 5. 将新编辑器添加到工作区并设为激活
 	w.OpenEditors[fullPath] = editor
 	w.SetActiveEditor(editor)
-
+	//load指令日志
+	firstLine := strings.Split(editor.GetContent(), "\n")[0]
+	if strings.Contains(firstLine, "# log") {
+		w.NotifyObservers(common.WorkspaceEvent{
+			FilePath:  fullPath,
+			Type:      "load",
+			Timestamp: time.Now().UnixMilli(),
+			Command:   "load " + fullPath,
+		})
+	}
 	// 可选：通知观察者文件已加载（取消注释启用）
 	// w.notifyObservers(common.WorkspaceEvent{
 	// 	Type:      "FILE_LOADED",
@@ -295,6 +332,8 @@ func (w *Workspace) SaveFile(editor common.Editor) error {
 
 	// 4. 从编辑器中获取内容并写入文件
 	content := editor.GetContent()
+	//这里保存的时候，绝对不能从lines里保存，不然新增的变化，无法持久化
+	//必须把树反序列化
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return errors.New("写入文件内容失败: " + err.Error())
 	}
@@ -338,14 +377,19 @@ func (w *Workspace) CloseFile(path string) error {
 			Timestamp: time.Now().UnixMilli(),
 		})
 	}
-
+	w.NotifyObservers(common.WorkspaceEvent{
+		FilePath:  fullPath,
+		Type:      common.EventFileClosed,
+		Command:   "",
+		Timestamp: time.Now().UnixMilli(),
+	})
 	delete(w.OpenEditors, fullPath)
 
 	if w.activeEditor != nil && w.activeEditor.GetFilePath() == fullPath {
 		// 7.1 若还有其他打开的文件，取第一个作为新的激活文件
 		if len(w.OpenEditors) > 0 {
 			for _, ed := range w.OpenEditors {
-				w.activeEditor = ed
+				w.SetActiveEditor(ed)
 				break
 			}
 		} else {
@@ -372,6 +416,12 @@ func (w *Workspace) SetActiveEditor(editor common.Editor) {
 		return
 	}
 	w.activeEditor = editor
+	w.NotifyObservers(common.WorkspaceEvent{
+		FilePath:  path,
+		Type:      common.EventFileActivated,
+		Command:   "SetActiveEditor",
+		Timestamp: time.Now().UnixMilli(),
+	})
 }
 
 // // ToggleLog 切换日志开关状态

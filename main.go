@@ -6,17 +6,28 @@ import (
 	"lab1/common"
 	"lab1/editor"
 	"lab1/log"
+	"lab1/statistics"
 	"lab1/storage"
 	"lab1/workspace"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
-//TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
+// TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
 // the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
+// 计时器绑定
+var timeStatistics = &statistics.Statistics{}
 
+func readFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
 func main() {
 	// 1. 初始化依赖组件
 	fileStorage := storage.NewLocalStorage("./workspace_state.json") // 状态存储路径
@@ -28,6 +39,10 @@ func main() {
 	// 3. 日志模块订阅工作区事件（观察者模式）
 	ws.RegisterObserver(logModule)
 
+	//计时器绑定
+	timeStatistics = statistics.NewStatistics()
+	ws.RegisterObserver(timeStatistics)
+	//timeStatistics.GetFormattedDuration()
 	//日志模块订阅编辑器事件
 
 	// 4. 从本地存储恢复上次工作区状态（备忘录模式）
@@ -35,6 +50,12 @@ func main() {
 		fmt.Printf("恢复工作区失败，使用新状态: %v\n", err)
 	} else {
 		fmt.Println("工作区已恢复上次状态")
+	}
+
+	content := readFile("t.txt")
+	err := editor.SpellCheckTxt(content)
+	if err != nil {
+		fmt.Println(err)
 	}
 
 	// 5. 启动交互循环，处理用户指令
@@ -45,6 +66,7 @@ func main() {
 func restoreWorkspaceState(ws *workspace.Workspace, storage *storage.LocalStorage) error {
 	// 调用 Workspace 的 RestoreState 方法，传入编辑器工厂函数
 	// 工厂函数复用之前定义的 editor.EditorFactory（需确保已导入 editor 包）
+	fmt.Println("restoreWorkspaceState")
 	return ws.RestoreState(editor.EditorFactory)
 }
 
@@ -72,7 +94,8 @@ func startInteractiveLoop(ws *workspace.Workspace) {
 
 // 处理用户指令
 func handleCommand(ws *workspace.Workspace, input string, debug bool) {
-	parts := strings.SplitN(input, " ", 4)
+	input = strings.TrimSpace(input)
+	parts := strings.SplitN(input, " ", 10)
 	if len(parts) == 0 {
 		fmt.Println("无效指令")
 		return
@@ -86,7 +109,7 @@ func handleCommand(ws *workspace.Workspace, input string, debug bool) {
 	case "close": //完成
 		_close(ws, parts)
 	case "init": //完成
-		_init(ws, parts)
+		_init(ws, input)
 	case "undo":
 		_undo(ws)
 	case "redo":
@@ -106,7 +129,10 @@ func handleCommand(ws *workspace.Workspace, input string, debug bool) {
 	case "show":
 		_show(ws, parts)
 	case "delete":
-		_delete(ws, parts)
+		// 先尝试按XML指令处理，若不是XML编辑器，再按文本指令处理
+		if !_xmlDelete(ws, parts) {
+			_delete(ws, parts)
+		}
 	case "replace":
 		_replace(ws, parts)
 	case "log-on":
@@ -115,9 +141,71 @@ func handleCommand(ws *workspace.Workspace, input string, debug bool) {
 		_LogOff(ws, parts)
 	case "log-show":
 		_LogShow(ws, parts)
+	//case :
+	case "insert-before":
+		_insertBefore(ws, parts)
+	case "append-child":
+		_appendChild(ws, parts)
+	case "edit-id":
+		_editId(ws, parts)
+	case "edit-text":
+		_editText(ws, parts)
+	case "xml-tree":
+		_xmlTree(ws, parts)
+	case "spell-check":
+		_spellCheck(ws, parts)
 	default:
 		fmt.Println("未知指令，支持: load/save/close/undo/exit")
 	}
+}
+func _spellCheck(ws *workspace.Workspace, parts []string) {
+	if len(parts) < 2 {
+		_ed := ws.GetActiveEditor()
+		if _ed == nil {
+			fmt.Println("当前没有活动文件")
+			return
+		}
+		content := readFile(_ed.GetFilePath())
+		ext := strings.ToLower(filepath.Ext(_ed.GetFilePath()))
+		var err error
+		switch ext {
+		case ".txt":
+			err = editor.SpellCheckTxt(content)
+		case ".xml":
+			err = editor.SpellCheckXML(content)
+		default:
+			fmt.Printf("不支持的文件类型: %s（仅支持 .txt/.xml）\n", ext)
+			return
+		}
+		if err != nil {
+			fmt.Println("拼写检查错误:", err)
+		}
+		return
+	}
+
+	parts = parts[1:]
+	part := strings.TrimSpace(strings.Join(parts, ""))
+	filePath := "files\\" + part
+	if _, ok := ws.OpenEditors[filePath]; !ok {
+		fmt.Println("目标文件未在工作区打开")
+		return
+	}
+	content := readFile(filePath)
+	ext := strings.ToLower(filepath.Ext(filePath))
+	var err error
+	switch ext {
+	case ".txt":
+		err = editor.SpellCheckTxt(content)
+	case ".xml":
+		err = editor.SpellCheckXML(content)
+	default:
+		fmt.Printf("不支持的文件类型: %s（仅支持 .txt/.xml）\n", ext)
+		return
+	}
+	if err != nil {
+		fmt.Println("拼写检查错误:", err)
+	}
+	return
 }
 func _load(ws *workspace.Workspace, parts []string, debug bool) {
 	if len(parts) < 2 {
@@ -218,6 +306,13 @@ func _LogOff(ws *workspace.Workspace, parts []string) {
 	targetEditor.SetLogEnabled(false)
 	fmt.Printf("已关闭文件 %s 的日志\n", targetEditor.GetFilePath())
 }
+func GetAfterLastBackslash(s string) string {
+	idx := strings.LastIndex(s, "\\")
+	if idx == -1 {
+		return ""
+	}
+	return s[idx+1:]
+}
 
 // 处理log-show：显示指定文件/当前活动文件的日志
 func _LogShow(ws *workspace.Workspace, parts []string) {
@@ -232,19 +327,19 @@ func _LogShow(ws *workspace.Workspace, parts []string) {
 	// 打印原始文件路径和计算的日志路径（用于调试）
 	fmt.Printf("调试：目标文件路径 = %q\n", targetEditor.GetFilePath())
 	// logFilePath := "." + filePath + ".log"
-	logFilePath := "." + targetEditor.GetFilePath() + ".log"
-	fmt.Printf("调试：日志文件路径 = %q\n", logFilePath) // 检查路径是否正确
+	logFilePath := "." + GetAfterLastBackslash(targetEditor.GetFilePath()) + ".log"
+	fmt.Printf("调试：日志文件路径 = %q\n", "logs\\"+logFilePath) // 检查路径是否正确
 
-	content, err := os.ReadFile(logFilePath)
+	content, err := os.ReadFile("logs\\" + logFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Printf("日志文件不存在：%s\n", logFilePath)
+			fmt.Printf("日志文件不存在：%s\n", "logs\\"+logFilePath)
 			return
 		}
 		fmt.Printf("读取日志失败：%v\n", err)
 		return
 	}
-	fmt.Printf("===== 日志内容（%s） =====\n", logFilePath)
+	fmt.Printf("===== 日志内容（%s） =====\n", "logs\\"+logFilePath)
 	fmt.Print(string(content))
 }
 
@@ -252,8 +347,8 @@ func _LogShow(ws *workspace.Workspace, parts []string) {
 func getTargetEditor(ws *workspace.Workspace, parts []string) common.Editor {
 	if len(parts) >= 2 {
 		// 指定文件：从已打开的编辑器中查找
-		if editor, exists := ws.OpenEditors[parts[1]]; exists {
-			return editor
+		if _editor, exists := ws.OpenEditors["files\\"+parts[1]]; exists {
+			return _editor
 		}
 		return nil
 	} else {
@@ -320,19 +415,19 @@ func _Save(ws *workspace.Workspace, input string, debug bool, parts []string) {
 			fmt.Printf("[DEBUG] 共找到 %d 个打开的文件，开始批量保存\n", len(openEditors))
 		}
 		successCount := 0
-		for i, editor := range openEditors {
+		for i, _editor := range openEditors {
 			if debug {
-				fmt.Printf("[DEBUG] 正在保存第 %d 个文件: %s\n", i+1, editor.GetFilePath())
+				fmt.Printf("[DEBUG] 正在保存第 %d 个文件: %s\n", i+1, _editor.GetFilePath())
 			}
-			if err := ws.SaveFile(editor); err != nil {
+			if err := ws.SaveFile(_editor); err != nil {
 				if debug {
 					fmt.Printf("[DEBUG] 第 %d 个文件保存失败: %v\n", i+1, err)
 				}
-				fmt.Printf("保存文件 %s 失败: %v\n", editor.GetFilePath(), err)
+				fmt.Printf("保存文件 %s 失败: %v\n", _editor.GetFilePath(), err)
 			} else {
 				successCount++
 				if debug {
-					fmt.Printf("[DEBUG] 第 %d 个文件保存成功: %s\n", i+1, editor.GetFilePath())
+					fmt.Printf("[DEBUG] 第 %d 个文件保存成功: %s\n", i+1, _editor.GetFilePath())
 				}
 			}
 		}
@@ -350,9 +445,9 @@ func _Save(ws *workspace.Workspace, input string, debug bool, parts []string) {
 		// 检查文件是否已打开
 		openEditors := ws.GetOpenEditors()
 		var targetEditor common.Editor
-		for _, editor := range openEditors {
-			if editor.GetFilePath() == targetPath {
-				targetEditor = editor
+		for _, _editor := range openEditors {
+			if _editor.GetFilePath() == targetPath {
+				targetEditor = _editor
 				if debug {
 					fmt.Printf("[DEBUG] 在已打开文件中找到目标文件: %s\n", targetPath)
 				}
@@ -381,30 +476,49 @@ func _Save(ws *workspace.Workspace, input string, debug bool, parts []string) {
 	}
 }
 
-func _init(ws *workspace.Workspace, parts []string) {
+func _init(ws *workspace.Workspace, input string) {
+	// 使用 strings.Fields 自动合并多个空格
+	parts := strings.Fields(input)
 	if len(parts) < 2 {
-		fmt.Println("用法: init <file> [with-log]")
+		fmt.Println("用法: init <filename> [with-log]")
 		return
 	}
+
+	// 文件名包含扩展名
 	fileName := parts[1]
 	withLog := len(parts) >= 3 && parts[2] == "with-log"
 
-	// 初始化文件内容
-	content := ""
-	if withLog {
-		content = "# log\n" // 带日志标记的初始化内容
+	// 获取文件后缀，决定初始化内容
+	ext := strings.ToLower(filepath.Ext(fileName))
+	var content string
+	switch ext {
+	case ".txt":
+		if withLog {
+			content = "# log\n"
+		}
+	case ".xml":
+		content = `<?xml version="1.0" encoding="UTF-8"?>
+<root id="root">
+</root>
+`
+	default:
+		fmt.Printf("不支持的文件类型: %s（仅支持 .txt/.xml）\n", ext)
+		return
 	}
-	fmt.Printf("[%s %s %s]", parts[0], parts[1], parts[2])
-	// 创建未保存的缓冲区（使用 fileName 作为唯一标识）
-	_editor := editor.NewTextEditor(fileName, content, ws)
-	_editor.MarkAsModified(true) // 新缓冲区默认标记为已修改
 
-	// 添加到工作区的未保存缓冲区，并设为活动文件
+	// 生成完整文件路径（暂未保存）
+	fullPath := "files\\" + fileName
+
+	// 创建未保存的缓冲区
+	_editor := editor.NewTextEditor(fullPath, content, ws)
+	_editor.MarkAsModified(true)
+
+	// 添加到工作区并设为活动文件
 	ws.OpenEditors[_editor.GetFilePath()] = _editor
 	ws.SetActiveEditor(_editor)
 
-	fmt.Printf("已创建新缓冲区: %s（未保存）\n", fileName)
-	if withLog {
+	fmt.Printf("已创建新缓冲区: %s（未保存）\n", fullPath)
+	if withLog && ext == ".txt" {
 		fmt.Println("已自动添加日志标记 '# log'")
 	}
 }
@@ -479,9 +593,11 @@ func _EditorList(ws *workspace.Workspace) {
 	for _, _editor := range openEditors {
 		if _editor.GetFilePath() != "" {
 			if _editor.IsModified() {
-				fmt.Printf("%s [modified]\n", _editor.GetFilePath())
+				fmt.Printf("%s [modified] (%s)\n", _editor.GetFilePath(),
+					timeStatistics.GetFormattedDuration(_editor.GetFilePath()))
 			} else {
-				fmt.Printf("%s\n", _editor.GetFilePath())
+				fmt.Printf("%s (%s)\n", _editor.GetFilePath(),
+					timeStatistics.GetFormattedDuration(_editor.GetFilePath()))
 			}
 		}
 	}
@@ -497,8 +613,20 @@ func _edit(ws *workspace.Workspace, parts []string) {
 	if fileName == "" {
 		fmt.Printf("请指定文件:edit [file]\n")
 	} else {
+		fileName = "files\\" + fileName
 		_, exists := ws.OpenEditors[fileName]
 		if exists {
+			activeFileName := ws.GetActiveEditor().GetFilePath()
+			if activeFileName == "" {
+				fmt.Println("error")
+				return
+			}
+			ws.NotifyObservers(common.WorkspaceEvent{
+				FilePath:  activeFileName,
+				Type:      common.EventFileSwitched,
+				Command:   "",
+				Timestamp: time.Now().UnixMilli(),
+			})
 			ws.SetActiveEditor(ws.OpenEditors[fileName])
 		} else {
 			fmt.Printf("文件未打开: [file]\n")
@@ -508,7 +636,10 @@ func _edit(ws *workspace.Workspace, parts []string) {
 }
 
 func _show(ws *workspace.Workspace, parts []string) {
-	activeEditor := ws.GetActiveEditor()
+	activeEditor, ok := ws.GetActiveEditor().(*editor.TextEditor)
+	if !ok {
+		fmt.Println("断言失败")
+	}
 	if activeEditor == nil {
 		fmt.Println("没有活动文件")
 		return
@@ -556,7 +687,10 @@ func _show(ws *workspace.Workspace, parts []string) {
 
 func _append(ws *workspace.Workspace, parts []string) {
 	// 1. 校验活动文件是否存在
-	activeEditor := ws.GetActiveEditor()
+	activeEditor, ok := ws.GetActiveEditor().(*editor.TextEditor)
+	if !ok {
+		fmt.Println("editor 断言失败")
+	}
 	if activeEditor == nil {
 		fmt.Println("错误：没有打开的文件，请先使用 load 命令加载文件")
 		return
@@ -590,7 +724,10 @@ func _append(ws *workspace.Workspace, parts []string) {
 
 func _insert(ws *workspace.Workspace, parts []string) {
 	// 1. 校验活动文件是否存在
-	activeEditor := ws.GetActiveEditor()
+	activeEditor, ok := ws.GetActiveEditor().(*editor.TextEditor)
+	if !ok {
+		fmt.Println("断言失败")
+	}
 	if activeEditor == nil {
 		fmt.Println("错误：没有打开的文件，请先使用 load 命令加载文件")
 		return
@@ -643,7 +780,10 @@ func _insert(ws *workspace.Workspace, parts []string) {
 
 func _delete(ws *workspace.Workspace, parts []string) {
 	// 1. 校验活动文件是否存在
-	activeEditor := ws.GetActiveEditor()
+	activeEditor, ok := ws.GetActiveEditor().(*editor.TextEditor)
+	if !ok {
+		fmt.Println("断言失败")
+	}
 	if activeEditor == nil {
 		fmt.Println("错误：没有打开的文件，请先使用 load 命令加载文件")
 		return
@@ -692,7 +832,10 @@ func _delete(ws *workspace.Workspace, parts []string) {
 
 func _replace(ws *workspace.Workspace, parts []string) {
 	// 1. 校验活动文件是否存在
-	activeEditor := ws.GetActiveEditor()
+	activeEditor, ok := ws.GetActiveEditor().(*editor.TextEditor)
+	if !ok {
+		fmt.Println("断言失败")
+	}
 	if activeEditor == nil {
 		fmt.Println("错误：没有打开的文件，请先使用 load 命令加载文件")
 		return
@@ -750,4 +893,224 @@ func _replace(ws *workspace.Workspace, parts []string) {
 	// 编辑器内部会先执行 delete 再执行 insert，处理各类异常
 	activeEditor.Replace(line, col, length, content)
 	fmt.Printf("已从 %d:%d 位置替换 %d 个字符为：%s\n", line, col, length, content)
+}
+
+func _insertBefore(ws *workspace.Workspace, parts []string) {
+	// 1. 参数校验：至少需要4个参数（指令名+tag+newId+targetId），可选text
+	if len(parts) < 4 {
+		fmt.Println("参数错误：insert-before 指令格式为 insert-before <tag> <newId> <targetId> [text]")
+		return
+	}
+	tag := parts[1]
+	newId := parts[2]
+	targetId := parts[3]
+	text := ""
+	if len(parts) >= 5 {
+		text = strings.Join(parts[4:], " ") // 处理带空格的text参数
+	}
+	text = strings.TrimSpace(text)
+	if text != "" {
+		text = text[1 : len(text)-1]
+	}
+	// 2. 获取当前编辑器并校验类型
+	_editor := ws.GetActiveEditor()
+	if _editor == nil {
+		fmt.Println("错误：未打开任何文件")
+		return
+	}
+	xmlEditor, ok := _editor.(*editor.XmlEditor)
+	if !ok {
+		fmt.Println("错误：当前打开的不是XML文件，无法执行insert-before操作")
+		return
+	}
+
+	// 3. 执行操作
+	err := xmlEditor.InsertBefore(tag, newId, targetId, text)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// _appendChild 处理 append-child <tag> <newId> <parentId> ["text"] 指令
+func _appendChild(ws *workspace.Workspace, parts []string) {
+	if len(parts) < 4 {
+		fmt.Println("参数错误：append-child 指令格式为 append-child <tag> <newId> <parentId> [text]")
+		return
+	}
+	//fmt.Printf("parts1:%s", parts[1])
+	tag := parts[1]
+	newId := parts[2]
+	parentId := parts[3]
+	text := ""
+	if len(parts) >= 5 {
+		text = strings.Join(parts[4:], " ")
+	}
+	//fmt.Println(tag, newId, parentId, text)
+	//fmt.Printf("1233")
+	//fmt.Println(text)
+	text = strings.TrimSpace(text)
+	if text != "" {
+		text = text[1 : len(text)-1]
+	}
+	_editor := ws.GetActiveEditor()
+	if _editor == nil {
+		fmt.Println("错误：未打开任何文件")
+		return
+	}
+	xmlEditor, ok := _editor.(*editor.XmlEditor)
+	if !ok {
+		fmt.Println("错误：当前打开的不是XML文件，无法执行append-child操作")
+		return
+	}
+
+	err := xmlEditor.AppendChild(tag, newId, parentId, text)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// _editId 处理 edit-id <oldId> <newId> 指令
+func _editId(ws *workspace.Workspace, parts []string) {
+	if len(parts) != 3 {
+		fmt.Println("参数错误：edit-id 指令格式为 edit-id <oldId> <newId>")
+		return
+	}
+	oldId := parts[1]
+	newId := parts[2]
+
+	_editor := ws.GetActiveEditor()
+	if _editor == nil {
+		fmt.Println("错误：未打开任何文件")
+		return
+	}
+	xmlEditor, ok := _editor.(*editor.XmlEditor)
+	if !ok {
+		fmt.Println("错误：当前打开的不是XML文件，无法执行edit-id操作")
+		return
+	}
+
+	err := xmlEditor.EditId(oldId, newId)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// _editText 处理 edit-text <elementId> ["text"] 指令
+func _editText(ws *workspace.Workspace, parts []string) {
+
+	if len(parts) < 2 {
+		fmt.Println("参数错误：edit-text 指令格式为 edit-text <elementId> [text]")
+		return
+	}
+	elementId := parts[1]
+	text := ""
+	if len(parts) >= 3 {
+		text = strings.Join(parts[2:], " ")
+	}
+	text = strings.TrimSpace(text)
+	//fmt.Println(parts[1])
+	//fmt.Println(text)
+	_editor := ws.GetActiveEditor()
+	if _editor == nil {
+		fmt.Println("错误：未打开任何文件")
+		return
+	}
+	xmlEditor, ok := _editor.(*editor.XmlEditor)
+	if !ok {
+		fmt.Println("错误：当前打开的不是XML文件，无法执行edit-text操作")
+		return
+	}
+
+	err := xmlEditor.EditText(elementId, text)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// _xmlDelete 处理 delete <elementId> 指令（XML版）
+// 返回值：true表示已按XML指令处理，false表示不是XML编辑器，需走文本delete逻辑
+func _xmlDelete(ws *workspace.Workspace, parts []string) bool {
+	if len(parts) != 2 {
+		return false // 参数个数不对，交给文本delete处理
+	}
+	elementId := parts[1]
+
+	_editor := ws.GetActiveEditor()
+	if _editor == nil {
+		fmt.Println("错误：未打开任何文件")
+		return true
+	}
+	xmlEditor, ok := _editor.(*editor.XmlEditor)
+	if !ok {
+		return false // 不是XML编辑器，交给文本delete处理
+	}
+
+	err := xmlEditor.Delete(elementId)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return true
+}
+
+// _xmlTree 处理 xml-tree [file] 指令
+func _xmlTree(ws *workspace.Workspace, parts []string) {
+
+	if len(parts) < 2 {
+		targetEditor := ws.GetActiveEditor()
+		if targetEditor == nil {
+			fmt.Println("当前没有活跃的编辑器")
+			return
+		}
+		// 类型断言：失败则直接返回，避免后续 nil 调用
+		xmlEditor, ok := targetEditor.(*editor.XmlEditor)
+		if !ok {
+			fmt.Printf("活跃编辑器类型错误，非 XML 编辑器\n")
+			return
+		}
+
+		// 跨平台路径拼接：使用 filepath.Join 替代硬编码的 \
+		err := xmlEditor.XmlTree(targetEditor.GetFilePath())
+		if err != nil {
+			fmt.Printf("生成 XML 树失败：%v\n", err)
+			return
+		}
+		return
+	}
+
+	// 分支2：有额外参数，拼接目标文件路径
+	filePath := strings.TrimSpace(strings.Join(parts[1:], ""))
+	if filePath == "" {
+		fmt.Println("文件路径参数为空")
+		return
+	}
+	totalFilePath := filepath.Join("files", filePath)
+
+	// 遍历已打开的编辑器，查找目标文件
+	var targetXmlEditor *editor.XmlEditor
+	for _, ed := range ws.OpenEditors {
+		if ed.GetFilePath() == totalFilePath {
+			// 类型断言：失败则提示并继续遍历（可能有其他编辑器）
+			xmlEd, ok := ed.(*editor.XmlEditor)
+			if !ok {
+				fmt.Printf("编辑器文件 %s 非 XML 编辑器类型\n", totalFilePath)
+				continue
+			}
+			targetXmlEditor = xmlEd
+			break
+		}
+	}
+
+	// 处理未找到编辑器/文件的情况
+	if targetXmlEditor == nil {
+		fmt.Printf("未找到已打开的 XML 编辑器：%s\n", totalFilePath)
+		return
+	}
+
+	// 生成并打印 XML 树（此处假设 XmlEditor 也有 XmlTree 方法，若逻辑不同需调整）
+	err := targetXmlEditor.XmlTree(totalFilePath)
+	if err != nil {
+		fmt.Printf("生成 XML 树失败：%v\n", err)
+		return
+	}
+
 }

@@ -2,31 +2,39 @@ package editor
 
 import (
 	"fmt"
-	"strings"
 	"lab1/common"
+	"strings"
 )
+
+type TextEditorInterface interface {
+	common.Editor
+	Show(startLine, endLine int)
+	Append(content string)
+	Insert(line, col int, text string)
+	Delete(line, col, length int)
+	Replace(line, col, length int, text string)
+}
 
 // TextEditor 文本编辑器（具体组件）
 type TextEditor struct {
-	filePath   string
-	lines      []string
-	isModified bool
-	undoStack  []Command
-	redoStack  []Command
-	logEnabled bool
+	//editorType string
+	filePath     string
+	lines        []string
+	isModified   bool
+	undoStack    []Command
+	redoStack    []Command
+	logEnabled   bool
 	workspaceApi common.WorkSpaceApi
 	//observers  []workspace.Observer // 观察者列表（可选，用于编辑器级事件）
 }
 
 // RegisterObsever()
 
-
-
-
-// 实现日志状态方法
+// IsLogEnabled 实现日志状态方法
 func (t *TextEditor) IsLogEnabled() bool {
-    return t.logEnabled
+	return t.logEnabled
 }
+
 // //这里要加上对文件首行的更新
 // func (t *TextEditor) SetLogEnabled(enabled bool) {
 //     t.logEnabled = enabled
@@ -34,8 +42,9 @@ func (t *TextEditor) IsLogEnabled() bool {
 
 // 	}else{
 
-// 	}
-// }
+//		}
+//	}
+//
 // SetLogEnabled 设置日志开关，并在内存中更新文件首行的# log标记（不直接持久化到磁盘）
 func (t *TextEditor) SetLogEnabled(enabled bool) {
 	// 1. 记录旧状态，若状态无变化则直接返回，避免无效操作
@@ -60,10 +69,9 @@ func (t *TextEditor) addLogMarkerInMemory() {
 	if len(t.lines) == 0 {
 		t.lines = []string{"# log"}
 	} else {
-		
+
 		firstLine := strings.TrimSpace(t.lines[0])
 		if firstLine != "# log" {
-			
 			t.lines = append([]string{"# log"}, t.lines...)
 		}
 	}
@@ -74,7 +82,7 @@ func (t *TextEditor) addLogMarkerInMemory() {
 // removeLogMarkerInMemory 仅在内存中移除文件首行的# log标记（有则删）
 func (t *TextEditor) removeLogMarkerInMemory() {
 	if len(t.lines) == 0 {
-		return 
+		return
 	}
 
 	// 去除首行空格后检查是否是目标标记
@@ -86,10 +94,10 @@ func (t *TextEditor) removeLogMarkerInMemory() {
 }
 
 // NewTextEditor 创建文本编辑器实例
-func NewTextEditor(filePath, content string,wsApi common.WorkSpaceApi) *TextEditor {
+func NewTextEditor(filePath, content string, wsApi common.WorkSpaceApi) *TextEditor {
 	return &TextEditor{
-		filePath: filePath,
-		lines:    strings.Split(content, "\n"),
+		filePath:     filePath,
+		lines:        strings.Split(content, "\n"),
 		workspaceApi: wsApi,
 		//observers: make([]workspace.Observer, 0),
 	}
@@ -147,11 +155,6 @@ func (te *TextEditor) Redo() error {
 func (te *TextEditor) GetContent() string {
 	return strings.Join(te.lines, "\n")
 }
-
-
-
-
-
 
 func (te *TextEditor) getLine(lineNum int) (string, bool) {
 	if lineNum < 0 || lineNum >= len(te.lines) {

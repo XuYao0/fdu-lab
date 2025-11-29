@@ -81,7 +81,7 @@ func EditorFactory(path string, wsApi common.WorkSpaceApi) (common.Editor, error
 			}
 			isNewFile = true // 标记为新创建的文件
 		} else {
-			
+
 			return nil, fmt.Errorf("failed to check file status: %w", err)
 		}
 	}
@@ -94,11 +94,11 @@ func EditorFactory(path string, wsApi common.WorkSpaceApi) (common.Editor, error
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".txt":
-		editor := NewTextEditor(path, string(content),wsApi)
+		editor := NewTextEditor(path, string(content), wsApi)
 		// 若为新创建的文件，标记为已修改且日志默认关闭
 		if isNewFile {
 			editor.MarkAsModified(true)
-			editor.SetLogEnabled(false) 
+			editor.SetLogEnabled(false)
 		} else {
 			// 现有文件检查首行是否有# log标记
 			firstLine := ""
@@ -106,7 +106,22 @@ func EditorFactory(path string, wsApi common.WorkSpaceApi) (common.Editor, error
 			if len(lines) > 0 {
 				firstLine = strings.TrimSpace(lines[0])
 			}
-			
+
+			logEnabled := strings.Contains(firstLine, "# log")
+			editor.SetLogEnabled(logEnabled)
+		}
+		return editor, nil
+	case ".xml":
+		editor := NewXmlEditor(path, string(content), wsApi)
+		if isNewFile {
+			editor.MarkAsModified(true)
+			editor.SetLogEnabled(false)
+		} else {
+			firstLine := ""
+			lines := strings.Split(string(content), "\n")
+			if len(lines) > 0 {
+				firstLine = strings.TrimSpace(lines[0])
+			}
 			logEnabled := strings.Contains(firstLine, "# log")
 			editor.SetLogEnabled(logEnabled)
 		}
@@ -115,7 +130,6 @@ func EditorFactory(path string, wsApi common.WorkSpaceApi) (common.Editor, error
 		return nil, errors.New("unsupported file type: " + ext)
 	}
 }
-
 
 /*
 新增逻辑，打开的时候，先检查首行# log标志，如果是新建的，那么默认lon为false
