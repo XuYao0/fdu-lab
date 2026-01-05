@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"encoding/xml"
 	"fmt"
+	"lab1/TreeAdapter"
 	"lab1/common"
 	"lab1/editor"
 	"lab1/log"
@@ -121,7 +123,8 @@ func handleCommand(ws *workspace.Workspace, input string, debug bool) {
 	case "exit":
 		_exit(ws)
 	case "dir-tree": //完成
-		_dirTree(ws, parts)
+		//_dirTree(ws, parts)
+		_dirTreeV2(ws, parts)
 	case "append":
 		_append(ws, parts)
 	case "insert":
@@ -151,7 +154,8 @@ func handleCommand(ws *workspace.Workspace, input string, debug bool) {
 	case "edit-text":
 		_editText(ws, parts)
 	case "xml-tree":
-		_xmlTree(ws, parts)
+		//_xmlTree(ws, parts)
+		_xmlTreeV2(ws, parts)
 	case "spell-check":
 		_spellCheck(ws, parts)
 	default:
@@ -284,6 +288,29 @@ func _dirTree(ws *workspace.Workspace, parts []string) {
 		return
 	}
 	fmt.Print(tree)
+}
+func _dirTreeV2(ws *workspace.Workspace, parts []string) {
+	// 默认当前目录，清理冗余路径
+	targetDir := "."
+	if len(parts) >= 2 {
+		targetDir = filepath.Clean(parts[1]) // 清理路径，跨平台更友好
+	}
+
+	//  存在 + 是目录
+	stat, err := os.Stat(targetDir)
+	if err != nil {
+
+		fmt.Printf("访问路径失败: %v\n", err)
+		return
+	}
+	if !stat.IsDir() {
+		fmt.Printf("指定路径不是目录: %s\n", targetDir)
+		return
+	}
+
+	dirTreeAdapter := &TreeAdapter.FileTreeAdapter{RootPath: targetDir}
+	println("=== 文件目录树形结构 ===")
+	TreeAdapter.PrintTree(dirTreeAdapter, dirTreeAdapter.GetRootNode(), "", true)
 }
 
 func _LogOn(ws *workspace.Workspace, parts []string) {
@@ -1113,4 +1140,43 @@ func _xmlTree(ws *workspace.Workspace, parts []string) {
 		return
 	}
 
+}
+
+func _xmlTreeV2(ws *workspace.Workspace, parts []string) {
+	// 1. 获取目标 XML 文件路径
+	var filePath string
+	if len(parts) < 2 {
+		activeEditor := ws.GetActiveEditor()
+		if activeEditor == nil {
+			fmt.Println("当前没有活跃的编辑器")
+			return
+		}
+		filePath = activeEditor.GetFilePath()
+	} else {
+		// 假设外部参数是相对于 "files" 目录的路径
+		filePath = filepath.Join("files", strings.TrimSpace(strings.Join(parts[1:], "")))
+	}
+
+	// 2. 读取并解析 XML 文件
+	xmlFile, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Printf("无法打开 XML 文件: %v\n", err)
+		return
+	}
+
+	var rootXML TreeAdapter.XMLNode
+	err = xml.Unmarshal(xmlFile, &rootXML)
+	if err != nil {
+		fmt.Printf("解析 XML 失败: %v\n", err)
+		return
+	}
+
+	// 3. 使用适配器
+	xmlAdapter := &TreeAdapter.XMLTreeAdapter{RootXML: rootXML}
+
+	fmt.Printf("=== XML 树形结构 [%s] ===\n", filePath)
+
+	// 4. 调用通用的打印函数
+	// 注意：初始调用 prefix 为 ""，isLast 为 true（因为根节点只有一个）
+	TreeAdapter.PrintTree(xmlAdapter, xmlAdapter.GetRootNode(), "", true)
 }
