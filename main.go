@@ -1136,7 +1136,7 @@ func _xmlTree(ws *workspace.Workspace, parts []string) {
 }
 
 func _xmlTreeV2(ws *workspace.Workspace, parts []string) {
-	// 1. 获取目标 XML 文件路径
+	// 获取目标 XML 文件路径
 	var filePath string
 	if len(parts) < 2 {
 		activeEditor := ws.GetActiveEditor()
@@ -1150,7 +1150,7 @@ func _xmlTreeV2(ws *workspace.Workspace, parts []string) {
 		filePath = filepath.Join("files", strings.TrimSpace(strings.Join(parts[1:], "")))
 	}
 
-	// 2. 读取并解析 XML 文件
+	// 读取并解析 XML 文件
 	xmlFile, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Printf("无法打开 XML 文件: %v\n", err)
@@ -1164,12 +1164,10 @@ func _xmlTreeV2(ws *workspace.Workspace, parts []string) {
 		return
 	}
 
-	// 3. 使用适配器
+	// 使用适配器
 	xmlAdapter := &TreeAdapter.XMLTreeAdapter{RootXML: rootXML}
 
 	fmt.Printf("=== XML 树形结构 [%s] ===\n", filePath)
 
-	// 4. 调用通用的打印函数
-	// 注意：初始调用 prefix 为 ""，isLast 为 true（因为根节点只有一个）
 	TreeAdapter.PrintTree(xmlAdapter, xmlAdapter.GetRootNode(), "", true)
 }
