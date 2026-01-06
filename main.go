@@ -282,29 +282,6 @@ func _dirTree(ws *workspace.Workspace, parts []string) {
 	}
 	fmt.Print(tree)
 }
-func _dirTreeV2(ws *workspace.Workspace, parts []string) {
-	// 默认当前目录，清理冗余路径
-	targetDir := "."
-	if len(parts) >= 2 {
-		targetDir = filepath.Clean(parts[1]) // 清理路径，跨平台更友好
-	}
-
-	//  存在 + 是目录
-	stat, err := os.Stat(targetDir)
-	if err != nil {
-
-		fmt.Printf("访问路径失败: %v\n", err)
-		return
-	}
-	if !stat.IsDir() {
-		fmt.Printf("指定路径不是目录: %s\n", targetDir)
-		return
-	}
-
-	dirTreeAdapter := &TreeAdapter.FileTreeAdapter{RootPath: targetDir}
-	println("=== 文件目录树形结构 ===")
-	TreeAdapter.PrintTree(dirTreeAdapter, dirTreeAdapter.GetRootNode(), "", true)
-}
 
 func _LogOn(ws *workspace.Workspace, parts []string) {
 	targetEditor := getTargetEditor(ws, parts) // 解析目标文件（见下方辅助函数）
@@ -1131,6 +1108,29 @@ func _xmlTree(ws *workspace.Workspace, parts []string) {
 
 }
 
+func _dirTreeV2(ws *workspace.Workspace, parts []string) {
+	// 默认当前目录，清理冗余路径
+	targetDir := "."
+	if len(parts) >= 2 {
+		targetDir = filepath.Clean(parts[1]) // 清理路径，跨平台更友好
+	}
+
+	//  存在 + 是目录
+	stat, err := os.Stat(targetDir)
+	if err != nil {
+
+		fmt.Printf("访问路径失败: %v\n", err)
+		return
+	}
+	if !stat.IsDir() {
+		fmt.Printf("指定路径不是目录: %s\n", targetDir)
+		return
+	}
+
+	dirTreeAdapter := &TreeAdapter.FileTreeAdapter{RootPath: targetDir}
+	println("=== 文件目录树形结构 ===")
+	TreeAdapter.PrintTree(dirTreeAdapter, dirTreeAdapter.GetRootNode(), "", true)
+}
 func _xmlTreeV2(ws *workspace.Workspace, parts []string) {
 	// 获取目标 XML 文件路径
 	var filePath string
