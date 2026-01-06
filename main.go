@@ -182,7 +182,7 @@ func _spellCheck(ws *workspace.Workspace, parts []string) {
 
 	parts = parts[1:]
 	part := strings.TrimSpace(strings.Join(parts, ""))
-	filePath := "files\\" + part
+	filePath := filepath.Join("files", part)
 	if _, ok := ws.OpenEditors[filePath]; !ok {
 		fmt.Println("目标文件未在工作区打开")
 		return
@@ -326,13 +326,6 @@ func _LogOff(ws *workspace.Workspace, parts []string) {
 	targetEditor.SetLogEnabled(false)
 	fmt.Printf("已关闭文件 %s 的日志\n", targetEditor.GetFilePath())
 }
-func GetAfterLastBackslash(s string) string {
-	idx := strings.LastIndex(s, "\\")
-	if idx == -1 {
-		return ""
-	}
-	return s[idx+1:]
-}
 
 // 处理log-show：显示指定文件/当前活动文件的日志
 func _LogShow(ws *workspace.Workspace, parts []string) {
@@ -342,32 +335,34 @@ func _LogShow(ws *workspace.Workspace, parts []string) {
 		return
 	}
 
-	//fmt.Printf("s%",logFilePath)
-
-	// 打印原始文件路径和计算的日志路径（用于调试）
+	// 打印原始文件路径和计算的日志路径
 	fmt.Printf("调试：目标文件路径 = %q\n", targetEditor.GetFilePath())
-	// logFilePath := "." + filePath + ".log"
-	logFilePath := "." + GetAfterLastBackslash(targetEditor.GetFilePath()) + ".log"
-	fmt.Printf("调试：日志文件路径 = %q\n", "logs\\"+logFilePath) // 检查路径是否正确
 
-	content, err := os.ReadFile("logs\\" + logFilePath)
+	// 使用 filepath.Base 获取文件名部分，拼接 .log
+	logFileName := "." + filepath.Base(targetEditor.GetFilePath()) + ".log"
+	logFullPath := filepath.Join("logs", logFileName)
+
+	fmt.Printf("调试：日志文件路径 = %q\n", logFullPath)
+
+	content, err := os.ReadFile(logFullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Printf("日志文件不存在：%s\n", "logs\\"+logFilePath)
+			fmt.Printf("日志文件不存在：%s\n", logFullPath)
 			return
 		}
 		fmt.Printf("读取日志失败：%v\n", err)
 		return
 	}
-	fmt.Printf("===== 日志内容（%s） =====\n", "logs\\"+logFilePath)
+	fmt.Printf("===== 日志内容（%s） =====\n", logFullPath)
 	fmt.Print(string(content))
 }
 
 // 辅助函数：获取目标文件的编辑器（支持指定文件或当前活动文件）
 func getTargetEditor(ws *workspace.Workspace, parts []string) common.Editor {
 	if len(parts) >= 2 {
-		// 指定文件：从已打开的编辑器中查找
-		if _editor, exists := ws.OpenEditors["files\\"+parts[1]]; exists {
+		// 指定文件：跨平台拼接路径进行查找
+		targetPath := filepath.Join("files", parts[1])
+		if _editor, exists := ws.OpenEditors[targetPath]; exists {
 			return _editor
 		}
 		return nil
@@ -526,8 +521,8 @@ func _init(ws *workspace.Workspace, input string) {
 		return
 	}
 
-	// 生成完整文件路径（暂未保存）
-	fullPath := "files\\" + fileName
+	// 生成跨平台路径
+	fullPath := filepath.Join("files", fileName)
 
 	// 创建未保存的缓冲区
 	_editor := editor.NewTextEditor(fullPath, content, ws)
@@ -633,8 +628,9 @@ func _edit(ws *workspace.Workspace, parts []string) {
 	if fileName == "" {
 		fmt.Printf("请指定文件:edit [file]\n")
 	} else {
-		fileName = "files\\" + fileName
-		_, exists := ws.OpenEditors[fileName]
+		// 跨平台拼接路径
+		fullPath := filepath.Join("files", fileName)
+		_, exists := ws.OpenEditors[fullPath]
 		if exists {
 			activeFileName := ws.GetActiveEditor().GetFilePath()
 			if activeFileName == "" {
@@ -647,7 +643,7 @@ func _edit(ws *workspace.Workspace, parts []string) {
 				Command:   "",
 				Timestamp: time.Now().UnixMilli(),
 			})
-			ws.SetActiveEditor(ws.OpenEditors[fileName])
+			ws.SetActiveEditor(ws.OpenEditors[fullPath])
 		} else {
 			fmt.Printf("文件未打开: [file]\n")
 		}
@@ -1126,7 +1122,7 @@ func _xmlTree(ws *workspace.Workspace, parts []string) {
 		return
 	}
 
-	// 生成并打印 XML 树（此处假设 XmlEditor 也有 XmlTree 方法，若逻辑不同需调整）
+	// 生成并打印 XML 树
 	err := targetXmlEditor.XmlTree(totalFilePath)
 	if err != nil {
 		fmt.Printf("生成 XML 树失败：%v\n", err)
@@ -1146,7 +1142,7 @@ func _xmlTreeV2(ws *workspace.Workspace, parts []string) {
 		}
 		filePath = activeEditor.GetFilePath()
 	} else {
-		// 假设外部参数是相对于 "files" 目录的路径
+		// 使用 filepath.Join 跨平台拼接
 		filePath = filepath.Join("files", strings.TrimSpace(strings.Join(parts[1:], "")))
 	}
 
