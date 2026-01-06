@@ -27,29 +27,27 @@ type TreeNode struct {
 // prefix: 缩进前缀
 // isLast: 是否是最后一个子节点
 func PrintTree(provider TreeDataProvider, node *TreeNode, prefix string, isLast bool) {
-	// 1. 确定当前节点的连接符
+
 	symbol := "├── "
 	if isLast {
 		symbol = "└── "
 	}
 
-	// 2. 根节点特殊处理：不打印前缀和符号，只打印名字
 	if prefix == "" {
 		fmt.Println(node.Name)
 	} else {
 		fmt.Println(prefix + symbol + node.Name)
 	}
 
-	// 3. 计算给子节点使用的新前缀
 	var newPrefix string
 	if prefix == "" {
-		// 根节点的子节点不需要前缀，但后续层级需要
+
 		newPrefix = ""
 	} else {
 		if isLast {
-			newPrefix = prefix + "    " // 后面没东西了，留空
+			newPrefix = prefix + "    "
 		} else {
-			newPrefix = prefix + "│   " // 后面还有兄弟节点，画竖线
+			newPrefix = prefix + "│   "
 		}
 	}
 
@@ -62,7 +60,7 @@ func PrintTree(provider TreeDataProvider, node *TreeNode, prefix string, isLast 
 
 	children := provider.GetChildren(node)
 	for i, child := range children {
-		// 关键修复：根节点下的第一层节点 prefix 应该传 ""，但 isLast 要根据实际情况
+		// 根节点下的第一层节点 prefix 应该传 ""，但 isLast 要根据实际情况
 		// 这样递归进去后，第一层子节点会显示 ├── 或 └──
 		if prefix == "" {
 			PrintTree(provider, child, " ", i == len(children)-1)
@@ -74,7 +72,7 @@ func PrintTree(provider TreeDataProvider, node *TreeNode, prefix string, isLast 
 
 // FileTreeAdapter 文件目录适配器，适配文件系统结构
 type FileTreeAdapter struct {
-	RootPath string // 文件目录的根路径
+	RootPath string
 }
 
 func (f *FileTreeAdapter) GetRootNode() *TreeNode {
@@ -82,10 +80,9 @@ func (f *FileTreeAdapter) GetRootNode() *TreeNode {
 	absPath, _ := filepath.Abs(f.RootPath)
 	rootName := filepath.Base(absPath)
 
-	// 如果 RootPath 是 "."，Base 会返回 "."，这没问题
 	return &TreeNode{
 		Name: rootName,
-		Data: absPath, // 存绝对路径确保读取不出错
+		Data: absPath,
 	}
 }
 
@@ -103,21 +100,13 @@ func (f *FileTreeAdapter) GetChildren(node *TreeNode) []*TreeNode {
 	var children []*TreeNode
 	for _, entry := range entries {
 		children = append(children, &TreeNode{
-			Name: entry.Name(),                          // 必须只是文件名，例如 "apple.txt"
-			Data: filepath.Join(nodePath, entry.Name()), // 必须是全路径
+			Name: entry.Name(),
+			Data: filepath.Join(nodePath, entry.Name()),
 		})
 	}
 	return children
 }
 
-// XMLNode 定义XML节点的结构体（根据你的XML结构调整字段）
-//
-//	type XMLNode struct {
-//		XMLName  xml.Name
-//		Content  string     `xml:",chardata"`
-//		Attrs    []xml.Attr `xml:",attr"`
-//		Children []XMLNode  `xml:",any"` // 子节点
-//	}
 type XMLNode struct {
 	XMLName  xml.Name
 	Attrs    []xml.Attr `xml:",any,attr"`
@@ -127,7 +116,7 @@ type XMLNode struct {
 
 // XMLTreeAdapter XML结构适配器
 type XMLTreeAdapter struct {
-	RootXML XMLNode // XML根节点
+	RootXML XMLNode
 }
 
 // GetRootNode 获取XML根节点
@@ -148,7 +137,7 @@ func (x *XMLTreeAdapter) GetChildren(node *TreeNode) []*TreeNode {
 
 	var children []*TreeNode
 	for _, childXML := range xmlNode.Children {
-		// 1过滤掉 XML 解析器产生的空白字符节点（Local 为空说明不是真正的标签）
+
 		if childXML.XMLName.Local == "" {
 			continue
 		}

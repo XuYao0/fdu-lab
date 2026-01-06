@@ -54,13 +54,6 @@ func main() {
 		fmt.Println("工作区已恢复上次状态")
 	}
 
-	content := readFile("t.txt")
-	err := editor.SpellCheckTxt(content)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// 5. 启动交互循环，处理用户指令
 	startInteractiveLoop(ws)
 }
 

@@ -1,3 +1,0 @@
-The documant was not properly syncronized.
-A critial error occurred in the servise module.
-Please review the algorithim and optimize its performence.
